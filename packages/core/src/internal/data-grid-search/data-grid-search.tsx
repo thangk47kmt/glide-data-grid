@@ -11,6 +11,44 @@ import ScrollingDataGrid, { type ScrollingDataGridProps } from "../scrolling-dat
 import { SearchWrapper } from "./data-grid-search-style.js";
 import { assert } from "../../common/support.js";
 
+/**
+ * Labels used by the built-in search bar.
+ *
+ * Each value is the complete text rendered for that label. This keeps the
+ * search UI independent from any particular i18n library while allowing a
+ * host application to provide its own translations.
+ */
+export interface DataGridSearchLabels {
+    readonly result: string;
+    readonly results: string;
+    readonly over1000: string;
+    readonly of: string;
+    readonly previous: string;
+    readonly next: string;
+    readonly close: string;
+    readonly typeToSearch: string;
+}
+
+/** English labels used when no search labels are provided. */
+const defaultSearchLabels: DataGridSearchLabels = {
+    result: "result",
+    results: "results",
+    over1000: "over 1000",
+    of: "of",
+    previous: "Previous Result",
+    next: "Next Result",
+    close: "Close Search",
+    typeToSearch: "Type to search",
+};
+
+function mergeSearchLabels(labels: Partial<DataGridSearchLabels> | undefined): DataGridSearchLabels {
+    if (labels === undefined) return defaultSearchLabels;
+    const safeLabels = Object.fromEntries(
+        Object.entries(labels).filter((entry): entry is [string, string] => typeof entry[1] === "string")
+    ) as Partial<DataGridSearchLabels>;
+    return { ...defaultSearchLabels, ...safeLabels };
+}
+
 // icons
 const upArrow = (
     <svg className="button-icon" viewBox="0 0 512 512">
@@ -85,6 +123,12 @@ export interface DataGridSearchProps extends Omit<ScrollingDataGridProps, "preli
      * @param newVal The new search value
      */
     readonly onSearchValueChange?: (newVal: string) => void;
+    /**
+     * Optional translations for the built-in search bar. Omitted values use
+     * the default English labels.
+     * @group Search
+     */
+    readonly searchLabels?: Partial<DataGridSearchLabels>;
     readonly searchInputRef: React.MutableRefObject<HTMLInputElement | null>;
 }
 
@@ -100,11 +144,14 @@ const DataGridSearch: React.FunctionComponent<DataGridSearchProps> = p => {
         searchValue,
         searchResults: searchResultsIn,
         onSearchValueChange,
+        searchLabels: searchLabelsIn,
         getCellsForSelection,
         onSearchResultsChanged,
         showSearch = false,
         onSearchClose,
     } = p;
+
+    const searchLabels = React.useMemo(() => mergeSearchLabels(searchLabelsIn), [searchLabelsIn]);
 
     const [searchID] = React.useState(() => "search-box-" + Math.round(Math.random() * 1000));
 
@@ -391,10 +438,12 @@ const DataGridSearch: React.FunctionComponent<DataGridSearchProps> = p => {
         if (searchStatus !== undefined) {
             resultString =
                 searchStatus.results >= 1000
-                    ? `over 1000`
-                    : `${searchStatus.results} result${searchStatus.results !== 1 ? "s" : ""}`;
+                    ? searchLabels.over1000
+                    : `${searchStatus.results} ${
+                          searchStatus.results !== 1 ? searchLabels.results : searchLabels.result
+                      }`;
             if (searchStatus.selectedIndex >= 0) {
-                resultString = `${searchStatus.selectedIndex + 1} of ${resultString}`;
+                resultString = `${searchStatus.selectedIndex + 1} ${searchLabels.of} ${resultString}`;
             }
         }
 
@@ -427,7 +476,7 @@ const DataGridSearch: React.FunctionComponent<DataGridSearchProps> = p => {
                     />
                     <button
                         type="button"
-                        aria-label="Previous Result"
+                        aria-label={searchLabels.previous}
                         aria-hidden={!showSearch}
                         tabIndex={showSearch ? undefined : -1}
                         onClick={onPrev}
@@ -436,7 +485,7 @@ const DataGridSearch: React.FunctionComponent<DataGridSearchProps> = p => {
                     </button>
                     <button
                         type="button"
-                        aria-label="Next Result"
+                        aria-label={searchLabels.next}
                         aria-hidden={!showSearch}
                         tabIndex={showSearch ? undefined : -1}
                         onClick={onNext}
@@ -446,7 +495,7 @@ const DataGridSearch: React.FunctionComponent<DataGridSearchProps> = p => {
                     {onSearchClose !== undefined && (
                         <button
                             type="button"
-                            aria-label="Close Search"
+                            aria-label={searchLabels.close}
                             aria-hidden={!showSearch}
                             data-testid="search-close-button"
                             tabIndex={showSearch ? undefined : -1}
@@ -464,7 +513,7 @@ const DataGridSearch: React.FunctionComponent<DataGridSearchProps> = p => {
                     </>
                 ) : (
                     <div className="gdg-search-status">
-                        <label htmlFor={searchID}>Type to search</label>
+                        <label htmlFor={searchID}>{searchLabels.typeToSearch}</label>
                     </div>
                 )}
             </SearchWrapper>
@@ -483,6 +532,7 @@ const DataGridSearch: React.FunctionComponent<DataGridSearchProps> = p => {
         onNext,
         onSearchClose,
         onClose,
+        searchLabels,
     ]);
 
     return (

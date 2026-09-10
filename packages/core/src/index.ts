@@ -46,6 +46,7 @@ export { getDataEditorTheme as getDefaultTheme, useTheme } from "./common/styles
 export { useColumnSizer } from "./data-editor/use-column-sizer.js";
 
 export type { DataEditorRef } from "./data-editor/data-editor.js";
+export type { DataGridSearchLabels } from "./internal/data-grid-search/data-grid-search.js";
 export { DataEditorAll as DataEditor } from "./data-editor-all.js";
 export type { DataEditorAllProps as DataEditorProps } from "./data-editor-all.js";
 export { emptyGridSelection } from "./data-editor/data-editor.js";

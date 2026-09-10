@@ -2,8 +2,10 @@ import * as React from "react";
 
 import {
     getByText,
+    getAllByText,
     queryByText,
     getByRole,
+    getAllByRole,
     findByText,
     fireEvent,
     render,
@@ -315,9 +317,10 @@ describe("Multi Select Editor", () => {
             data: { ...mockCell.data, values: ["option1", "option2"] },
         });
 
-        // Option 1 and 2 should not be available anymore
-        expect(hasOption(cellEditor, "Option 1")).toBeFalsy();
-        expect(hasOption(cellEditor, "Option 2")).toBeFalsy();
+        // Selected options remain in the menu so their checkboxes can be
+        // toggled off again.
+        expect(hasOption(cellEditor, "Option 1")).toBeTruthy();
+        expect(hasOption(cellEditor, "Option 2")).toBeTruthy();
     });
 
     it("is disabled if readonly", async () => {
@@ -376,6 +379,105 @@ describe("Multi Select Editor", () => {
         });
     });
 
+    it("renders a checkbox for every option and toggles it without closing the menu", async () => {
+        const mockCell = getMockCell();
+        // @ts-ignore
+        const Editor = renderer.provideEditor?.({ ...mockCell, location: [0, 0] }).editor;
+        if (Editor === undefined) throw new Error("Editor is invalid");
+
+        const mockCellOnChange = vi.fn();
+        const result = render(<Editor isHighlighted={false} value={mockCell} onChange={mockCellOnChange} />);
+        const cellEditor = result.getByTestId("multi-select-cell");
+        const listBox = getByRole(cellEditor, "listbox");
+        const checkboxes = getAllByRole(listBox, "checkbox");
+        expect(checkboxes).toHaveLength(2);
+        expect((checkboxes[0] as HTMLInputElement).checked).toBe(false);
+
+        fireEvent.click(checkboxes[0]);
+        expect(mockCellOnChange).toHaveBeenLastCalledWith({
+            ...mockCell,
+            data: { ...mockCell.data, values: ["option1"] },
+        });
+        expect((getAllByRole(listBox, "checkbox")[0] as HTMLInputElement).checked).toBe(true);
+
+        // The menu stays open, allowing another checkbox to be selected or the
+        // first one to be unchecked before committing the editor.
+        expect(getByRole(cellEditor, "listbox")).toBeDefined();
+        fireEvent.click(getAllByRole(getByRole(cellEditor, "listbox"), "checkbox")[0]);
+        expect(mockCellOnChange).toHaveBeenLastCalledWith({
+            ...mockCell,
+            data: { ...mockCell.data, values: [] },
+        });
+    });
+
+    it("keeps a normal mouse click to one toggle", () => {
+        const mockCell = getMockCell();
+        // @ts-ignore
+        const Editor = renderer.provideEditor?.({ ...mockCell, location: [0, 0] }).editor;
+        if (Editor === undefined) throw new Error("Editor is invalid");
+
+        const onChange = vi.fn();
+        const result = render(<Editor isHighlighted={false} value={mockCell} onChange={onChange} />);
+        const option = getAllByRole(getByRole(result.getByTestId("multi-select-cell"), "listbox"), "option")[0];
+        fireEvent.mouseDown(option);
+        fireEvent.mouseUp(option);
+        fireEvent.click(option);
+        expect(onChange).toHaveBeenCalledTimes(1);
+        expect(onChange).toHaveBeenLastCalledWith({
+            ...mockCell,
+            data: { ...mockCell.data, values: ["option1"] },
+        });
+    });
+
+    it("commits the checkbox draft on Enter and Tab", () => {
+        const mockCell = getMockCell();
+        // @ts-ignore
+        const Editor = renderer.provideEditor?.({ ...mockCell, location: [0, 0] }).editor;
+        if (Editor === undefined) throw new Error("Editor is invalid");
+
+        const onChange = vi.fn();
+        const onFinishedEditing = vi.fn();
+        const result = render(
+            <Editor
+                isHighlighted={false}
+                value={mockCell}
+                onChange={onChange}
+                onFinishedEditing={onFinishedEditing}
+            />
+        );
+        const cellEditor = result.getByTestId("multi-select-cell");
+        fireEvent.click(getAllByRole(getByRole(cellEditor, "listbox"), "checkbox")[1]);
+        fireEvent.keyDown(getByRole(cellEditor, "combobox"), { key: "Enter" });
+
+        expect(onFinishedEditing).toHaveBeenCalledWith(
+            { ...mockCell, data: { ...mockCell.data, values: ["option2"] } },
+            [0, 1]
+        );
+    });
+
+    it("toggles each row once while dragging across options", () => {
+        const mockCell = getMockCell();
+        // @ts-ignore
+        const Editor = renderer.provideEditor?.({ ...mockCell, location: [0, 0] }).editor;
+        if (Editor === undefined) throw new Error("Editor is invalid");
+
+        const onChange = vi.fn();
+        const result = render(<Editor isHighlighted={false} value={mockCell} onChange={onChange} />);
+        const listBox = getByRole(result.getByTestId("multi-select-cell"), "listbox");
+        let options = getAllByRole(listBox, "option");
+
+        fireEvent.mouseDown(options[0]);
+        options = getAllByRole(getByRole(result.getByTestId("multi-select-cell"), "listbox"), "option");
+        fireEvent.mouseEnter(options[1]);
+        fireEvent.mouseUp(options[1]);
+        fireEvent.click(options[1]);
+
+        expect(onChange).toHaveBeenLastCalledWith({
+            ...mockCell,
+            data: { ...mockCell.data, values: ["option1", "option2"] },
+        });
+    });
+
     // TODO: Add test for creating new options
 
     it("allows text selection in pill labels (onMouseDown does not prevent default)", async () => {
@@ -403,7 +505,7 @@ describe("Multi Select Editor", () => {
         const cellEditor = result.getByTestId("multi-select-cell");
 
         // Find the pill labels (MultiValueLabel components render with the label text)
-        const pillLabel = getByText(cellEditor, "Option 1");
+        const pillLabel = getAllByText(cellEditor, "Option 1")[0];
         expect(pillLabel).toBeDefined();
 
         // Simulate mousedown on the pill label - it should not prevent default (allowing text selection)
@@ -447,7 +549,7 @@ describe("Multi Select Editor", () => {
         const cellEditor = result.getByTestId("multi-select-cell");
 
         // Find the pill label first
-        const pillLabel = getByText(cellEditor, "Option 1");
+        const pillLabel = getAllByText(cellEditor, "Option 1")[0];
         expect(pillLabel).toBeDefined();
 
         // The remove button is a sibling of the label within the multi-value container

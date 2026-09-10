@@ -21,15 +21,50 @@ const CustomMenu: React.FC<CustomMenuProps> = p => {
     return <Menu {...rest}>{children}</Menu>;
 };
 
-type DropdownOption = string | { value: string; label: string } | undefined | null;
+/** An option accepted by {@link DropdownCell}. Options are column-local data. */
+export type DropdownOption = string | { value: string; label: string } | undefined | null;
 
-interface DropdownCellProps {
+export interface DropdownCellProps {
     readonly kind: "dropdown-cell";
     readonly value: string | undefined | null;
     readonly allowedValues: readonly DropdownOption[];
 }
 
 export type DropdownCell = CustomCell<DropdownCellProps>;
+
+export interface NormalizedDropdownOption {
+    readonly value: string | undefined | null;
+    readonly label: string;
+}
+
+/** Normalizes primitive and labeled options without scanning any grid rows. */
+export function normalizeDropdownOptions(options: readonly DropdownOption[]): NormalizedDropdownOption[] {
+    return options.map<NormalizedDropdownOption>(option => {
+        if (typeof option === "string" || option === null || option === undefined) return { value: option, label: option?.toString() ?? "" };
+        return option;
+    });
+}
+
+/** Returns whether one option matches a query, case-insensitively. */
+export function matchesDropdownOption(option: NormalizedDropdownOption, query: string): boolean {
+    const normalizedQuery = query.toLocaleLowerCase("en-US");
+    return normalizedQuery === "" || option.label.toLocaleLowerCase("en-US").includes(normalizedQuery) || String(option.value ?? "").toLocaleLowerCase("en-US").includes(normalizedQuery);
+}
+
+/** Returns options whose value or label contains the query, case-insensitively. */
+export function filterDropdownOptions(options: readonly NormalizedDropdownOption[], query: string): NormalizedDropdownOption[] {
+    return options.filter(option => matchesDropdownOption(option, query));
+}
+
+/** Checks whether a value is one of the configured options. */
+export function isDropdownValueAllowed(value: string | undefined | null, options: readonly DropdownOption[]): boolean {
+    return options.some(option => typeof option === "string" || option === null || option === undefined ? option === value : option.value === value);
+}
+
+/** Validates pasted text and retains the current value when it is not allowed. */
+export function validateDropdownPaste(value: string, currentValue: string | undefined | null, options: readonly DropdownOption[]): string | undefined | null {
+    return isDropdownValueAllowed(value, options) ? value : currentValue;
+}
 
 const Wrap = styled.div`
     display: flex;
@@ -68,16 +103,13 @@ const Editor: ReturnType<ProvideEditorCallback<DropdownCell>> = p => {
     const [value, setValue] = React.useState(valueIn);
     const [inputValue, setInputValue] = React.useState(initialValue ?? "");
 
+    React.useEffect(() => {
+        setValue(valueIn);
+    }, [valueIn]);
+
     const theme = useTheme();
 
-    const values = React.useMemo(() => {
-        return allowedValues.map(option => {
-            if (typeof option === "string" || option === null || option === undefined) {
-                return { value: option, label: option?.toString() ?? "" };
-            }
-            return option;
-        });
-    }, [allowedValues]);
+    const values = React.useMemo(() => normalizeDropdownOptions(allowedValues), [allowedValues]);
 
     if (cell.readonly) {
         return (
@@ -99,6 +131,8 @@ const Editor: ReturnType<ProvideEditorCallback<DropdownCell>> = p => {
                 className="glide-select"
                 inputValue={inputValue}
                 onInputChange={setInputValue}
+                filterOption={(option, input) => matchesDropdownOption(option, input)}
+                onKeyDown={event => event.stopPropagation()}
                 menuPlacement={"auto"}
                 value={values.find(x => x.value === value)}
                 styles={{
@@ -223,13 +257,7 @@ const renderer: CustomRenderer<DropdownCell> = {
     }),
     onPaste: (v, d) => ({
         ...d,
-        value: d.allowedValues.some(option => {
-            if (option === null || option === undefined) return false;
-            if (typeof option === "string") return option === v;
-            return option.value === v;
-        })
-            ? v
-            : d.value,
+        value: validateDropdownPaste(v, d.value, d.allowedValues),
     }),
 };
 

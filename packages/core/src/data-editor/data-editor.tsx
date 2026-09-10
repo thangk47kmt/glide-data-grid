@@ -822,6 +822,7 @@ const DataEditorImpl: React.ForwardRefRenderFunction<DataEditorRef, DataEditorPr
         onCellsEdited,
         onSearchResultsChanged: onSearchResultsChangedIn,
         searchResults,
+        searchLabels,
         onSearchValueChange,
         searchValue,
         onKeyDown: onKeyDownIn,
@@ -2408,7 +2409,8 @@ const DataEditorImpl: React.ForwardRefRenderFunction<DataEditorRef, DataEditorPr
                                 col === selectedCol && col === prevCol && row === selectedRow && row === prevRow;
                             shouldActivate =
                                 isClickOnSelected &&
-                                (a.isDoubleClick === true || cellActivationBehavior === "second-click");
+                                (a.isDoubleClick === true ||
+                                    (c.activationBehaviorOverride === undefined && cellActivationBehavior === "second-click"));
                             break;
                         }
                         case "single-click": {
@@ -4268,6 +4270,7 @@ const DataEditorImpl: React.ForwardRefRenderFunction<DataEditorRef, DataEditorPr
                     searchInputRef={searchInputRef}
                     showSearch={showSearch}
                     onSearchClose={onSearchClose}
+                    searchLabels={searchLabels}
                     highlightRegions={highlightRegions}
                     getCellsForSelection={getCellsForSelection}
                     getGroupDetails={mangledGetGroupDetails}

@@ -1,8 +1,14 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig, configDefaults } from "vitest/config";
+import { fileURLToPath } from "node:url";
 
 export default defineConfig({
     plugins: [react()],
+    resolve: {
+        alias: {
+            "@glideapps/glide-data-grid": fileURLToPath(new URL("../core/src/index.ts", import.meta.url)),
+        },
+    },
     test: {
         include: ["test/**/*.test.tsx", "test/**/*.test.ts"],
         environment: "jsdom",

@@ -32,9 +32,22 @@ export const drilldownCellRenderer: InternalCellRenderer<DrilldownCell> = {
     draw: a => drawDrilldownCell(a, a.cell.data),
     provideEditor: () => p => {
         const { value } = p;
-        return <DrilldownOverlayEditor drilldowns={value.data} />;
+        return (
+            <DrilldownOverlayEditor
+                drilldowns={value.data}
+                value={value}
+                onChange={p.onChange}
+                onFinishedEditing={p.onFinishedEditing}
+            />
+        );
     },
-    onPaste: () => undefined,
+    onPaste: (val, cell) => {
+        const values = val.split(",").map(value => value.trim()).filter(value => value !== "");
+        return {
+            ...cell,
+            data: values.map(text => ({ text })),
+        };
+    },
 };
 
 const drilldownCache: {

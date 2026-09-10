@@ -13,6 +13,18 @@ module.exports = {
         const wyw = await import("@wyw-in-js/vite");
         return mergeConfig(config, {
             plugins: [wyw.default()],
+            resolve: {
+                alias: [
+                    {
+                        find: /^@glideapps\/glide-data-grid\/dist\/index\.css$/,
+                        replacement: join(__dirname, "source-mode.css"),
+                    },
+                    {
+                        find: /^@glideapps\/glide-data-grid$/,
+                        replacement: join(__dirname, "../packages/core/src/index.ts"),
+                    },
+                ],
+            },
         });
     },
 

@@ -1,12 +1,12 @@
 import * as React from "react";
-import { render, cleanup } from "@testing-library/react";
+import { render, cleanup, screen, fireEvent } from "@testing-library/react";
 import BubblesOverlayEditor from "../src/internal/data-grid-overlay-editor/private/bubbles-overlay-editor.js";
 import DrilldownOverlayEditor from "../src/internal/data-grid-overlay-editor/private/drilldown-overlay-editor.js";
 import { GridCellKind, ImageOverlayEditor } from "../src/index.js";
 import { MarkdownOverlayEditor } from "../src/internal/data-grid-overlay-editor/private/markdown-overlay-editor.js";
 import NumberOverlayEditor from "../src/internal/data-grid-overlay-editor/private/number-overlay-editor.js";
 import UriOverlayEditor from "../src/internal/data-grid-overlay-editor/private/uri-overlay-editor.js";
-import { vi, describe, test, afterEach } from "vitest";
+import { vi, describe, test, afterEach, expect } from "vitest";
 
 describe("data-grid-overlay", () => {
     afterEach(() => {
@@ -17,8 +17,41 @@ describe("data-grid-overlay", () => {
         render(<BubblesOverlayEditor bubbles={["A", "B"]} />);
     });
 
-    test("Smoke test drilldown", async () => {
+    test("Drilldown overlay exposes its values to assistive technology", async () => {
         render(<DrilldownOverlayEditor drilldowns={[{ text: "A" }, { text: "B" }]} />);
+
+        expect(screen.getByRole("list", { name: "Drilldown values" })).toBeTruthy();
+        expect(screen.getAllByRole("listitem")).toHaveLength(2);
+        expect(screen.getByRole("listitem", { name: "A" })).toBeTruthy();
+    });
+
+    test("Drilldown overlay edits values and commits with Enter", () => {
+        const onChange = vi.fn();
+        const onFinishedEditing = vi.fn();
+        const value = {
+            kind: GridCellKind.Drilldown,
+            allowOverlay: true,
+            data: [{ text: "A" }, { text: "B" }],
+        } as const;
+
+        render(
+            <DrilldownOverlayEditor
+                drilldowns={value.data}
+                value={value}
+                onChange={onChange}
+                onFinishedEditing={onFinishedEditing}
+            />
+        );
+
+        const input = screen.getByRole("textbox", { name: "Drilldown value 1" });
+        fireEvent.change(input, { target: { value: "Edited" } });
+        expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ data: [{ text: "Edited" }, { text: "B" }] }));
+
+        fireEvent.keyDown(input, { key: "Enter" });
+        expect(onFinishedEditing).toHaveBeenCalledWith(
+            expect.objectContaining({ data: [{ text: "Edited" }, { text: "B" }] }),
+            [0, 1]
+        );
     });
 
     test("Smoke test image overlay", async () => {

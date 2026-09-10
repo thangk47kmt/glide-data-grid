@@ -557,6 +557,77 @@ describe("data-editor", () => {
             expect(spy).toHaveBeenCalled();
             expect(spy).toHaveBeenCalledWith([1, 1], expect.anything());
         });
+
+        test("dropdown-shaped cells keep the default second-click/double-click activation", async () => {
+            const spy = vi.fn();
+            const normalDropdown: GridCell = {
+                kind: GridCellKind.Custom,
+                allowOverlay: true,
+                data: { kind: "dropdown-cell", value: "Open", allowedValues: ["Open", "Closed"] },
+            } as GridCell;
+            const formulaDropdown: GridCell = {
+                kind: GridCellKind.Custom,
+                allowOverlay: true,
+                copyData: "=[@Status]",
+                data: { kind: "dropdown-cell", value: "Open", allowedValues: ["Open", "Closed"] },
+            } as GridCell;
+
+            vi.useFakeTimers();
+            render(
+                <DataEditor
+                    {...basicProps}
+                    onCellActivated={spy}
+                    getCellContent={cell => cell[0] === 0 ? normalDropdown : formulaDropdown}
+                />,
+                { wrapper: Context }
+            );
+            prep(false);
+            const canvas = screen.getByTestId("data-grid-canvas");
+            const first = getCellCenterPositionForDefaultGrid([0, 1]);
+            const second = getCellCenterPositionForDefaultGrid([1, 1]);
+
+            // A first click only selects; it must not open either normal or
+            // formula dropdown. The second click activates per DataEditor's
+            // default `second-click` behavior (including double-click).
+            sendClick(canvas, { clientX: first[0], clientY: first[1] });
+            expect(spy).not.toHaveBeenCalled();
+            sendClick(canvas, { clientX: first[0], clientY: first[1] });
+            sendClick(canvas, { clientX: second[0], clientY: second[1] });
+            expect(spy).toHaveBeenCalledTimes(1);
+            sendClick(canvas, { clientX: second[0], clientY: second[1] });
+            expect(spy).toHaveBeenCalledTimes(2);
+        });
+
+        test("cell double-click override does not activate on a later second click", async () => {
+            const spy = vi.fn();
+            vi.useFakeTimers();
+            render(
+                <DataEditor
+                    {...basicProps}
+                    onCellActivated={spy}
+                    getCellContent={cell => cell[0] === 4
+                        ? {
+                            kind: GridCellKind.Drilldown,
+                            allowOverlay: true,
+                            activationBehaviorOverride: "double-click",
+                            data: [{ text: "Foobar" }],
+                        }
+                        : basicProps.getCellContent(cell)}
+                />,
+                { wrapper: Context }
+            );
+            prep(false);
+            const canvas = screen.getByTestId("data-grid-canvas");
+            const position = getCellCenterPositionForDefaultGrid([4, 1]);
+
+            sendClick(canvas, { clientX: position[0], clientY: position[1] });
+            act(() => vi.advanceTimersByTime(1_600));
+            sendClick(canvas, { clientX: position[0], clientY: position[1] });
+            expect(spy).not.toHaveBeenCalled();
+
+            sendClick(canvas, { clientX: position[0], clientY: position[1] });
+            expect(spy).toHaveBeenCalledTimes(1);
+        });
     });
 
     test("Does not emit activated event on double click with different buttons", async () => {

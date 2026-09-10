@@ -3,6 +3,7 @@
     "version": "6.0.4-alpha25",
     "scripts": {
         "start": "npm run storybook",
+        "debug:spreadsheet": "npm run storybook:run",
         "version": "./update-version.sh",
         "build": "npm run build --workspaces && npm run lint --workspaces",
         "typedoc": "typedoc --readme none --disableSources --tsconfig packages/core/tsconfig.json",
@@ -17,6 +18,10 @@
         "test-19": "./setup-react-19-test.sh && cd packages/core && npm run test --",
         "test-source": "cd packages/source && npm run test",
         "test-cells": "cd packages/cells && npm run test",
+        "test-spreadsheet": "npm run test -w packages/spreadsheet",
+        "verify:spreadsheet:phase0": "npm run test-spreadsheet && npm run lint -w packages/spreadsheet && npm run build -w packages/spreadsheet",
+        "benchmark:spreadsheet": "npm run benchmark -w packages/spreadsheet",
+        "test-all": "npm run test && npm run test-source && npm run test-cells && npm run test-spreadsheet",
         "test-projects": "cd test-projects/ && ./bootstrap-projects.sh"
     },
     "type": "commonjs",
@@ -25,7 +30,8 @@
     "workspaces": [
         "./packages/core",
         "./packages/cells",
-        "./packages/source"
+        "./packages/source",
+        "./packages/spreadsheet"
     ],
     "devDependencies": {
         "@babel/cli": "^7.27.2",

@@ -14,7 +14,13 @@ import {
 } from "@glideapps/glide-data-grid";
 
 import { styled } from "@linaria/react";
-import Select, { type MenuProps, type MultiValueGenericProps, components, type StylesConfig } from "react-select";
+import Select, {
+    type MenuProps,
+    type MultiValueGenericProps,
+    type OptionProps,
+    components,
+    type StylesConfig,
+} from "react-select";
 import CreatableSelect from "react-select/creatable";
 
 type SelectOption = { value: string; label?: string; color?: string };
@@ -170,6 +176,30 @@ const SelectableMultiValueLabel: React.FC<MultiValueGenericProps<SelectOption>> 
     );
 };
 
+/**
+ * The standard react-select option is still used for keyboard navigation and
+ * filtering, but gets a checkbox at the start of each row. Keeping the
+ * checkbox read-only is intentional: react-select owns the selection state and
+ * toggles it from the option click. This also means clicking either the label
+ * or the checkbox has the same behavior.
+ */
+const CheckboxOption: React.FC<OptionProps<SelectOption, true>> = props => {
+    const label = String(props.children ?? props.data.label ?? props.data.value ?? "");
+    return (
+        <components.Option {...props}>
+            <input
+                type="checkbox"
+                checked={props.isSelected}
+                readOnly={true}
+                tabIndex={-1}
+                aria-label={label}
+                style={{ marginRight: 8, cursor: "pointer" }}
+            />
+            {props.children}
+        </components.Option>
+    );
+};
+
 export type MultiSelectCell = CustomCell<MultiSelectCellProps>;
 
 const Editor: ReturnType<ProvideEditorCallback<MultiSelectCell>> = p => {
@@ -177,6 +207,9 @@ const Editor: ReturnType<ProvideEditorCallback<MultiSelectCell>> = p => {
     const { options: optionsIn, values: valuesIn, allowCreation, allowDuplicates } = cell.data;
 
     const theme = useTheme();
+    // `value` is the editor's draft. `onChange` updates the grid overlay's
+    // temporary value, while the overlay commits it when the editor is closed
+    // (click outside, Enter, or Tab).
     const [value, setValue] = React.useState(valuesIn);
     const [menuOpen, setMenuOpen] = React.useState(true);
     const [inputValue, setInputValue] = React.useState(initialValue ?? "");
@@ -352,25 +385,132 @@ const Editor: ReturnType<ProvideEditorCallback<MultiSelectCell>> = p => {
         [cell, onChange, allowDuplicates]
     );
 
-    const handleKeyDown: React.KeyboardEventHandler = event => {
-        switch (event.key) {
-            case "Enter":
-            case "Tab":
-                if (!inputValue) {
-                    // If the user pressed enter or tab without entering anything,
-                    // we finish editing based on the current state.
-                    onFinishedEditing(cell, [0, 1]);
+    // A short drag across option rows toggles each row once. This keeps the
+    // normal react-select click behavior for a single click, while making it
+    // possible to sweep through a group of checkboxes quickly. Duplicates keep
+    // their legacy behavior (a click adds another occurrence), so drag-to-toggle
+    // is limited to the regular unique-value mode.
+    const dragState = React.useRef({ active: false, moved: false, visited: new Set<string>() });
+    React.useEffect(() => {
+        const releaseDrag = () => {
+            dragState.current.active = false;
+        };
+        document.addEventListener("mouseup", releaseDrag);
+        document.addEventListener("pointerup", releaseDrag);
+        return () => {
+            document.removeEventListener("mouseup", releaseDrag);
+            document.removeEventListener("pointerup", releaseDrag);
+        };
+    }, []);
+
+    const toggleDraggedOption = React.useCallback(
+        (optionValue: string) => {
+            if (allowDuplicates) return;
+            const current = value ?? [];
+            const index = current.indexOf(optionValue);
+            const next = index === -1 ? [...current, optionValue] : current.filter((_, i) => i !== index);
+            submitValues(next);
+        },
+        [allowDuplicates, submitValues, value]
+    );
+
+    const DragCheckboxOption: React.FC<OptionProps<SelectOption, true>> = optionProps => {
+        const optionValue = optionProps.data.value;
+        const existingInnerProps = optionProps.innerProps as React.ComponentPropsWithoutRef<"div">;
+        const enhancedInnerProps: React.ComponentPropsWithoutRef<"div"> = {
+            ...existingInnerProps,
+            onMouseDown: event => {
+                dragState.current.active = true;
+                dragState.current.moved = false;
+                dragState.current.visited = new Set([optionValue]);
+                if (!allowDuplicates) {
+                    // Toggle the starting row immediately. A real mouse click
+                    // will follow this event, so its onClick is suppressed
+                    // below; keyboard-triggered clicks still use react-select's
+                    // normal onClick path.
+                    toggleDraggedOption(optionValue);
+                }
+                existingInnerProps?.onMouseDown?.(event);
+            },
+            onMouseEnter: event => {
+                existingInnerProps?.onMouseMove?.(event as React.MouseEvent<HTMLDivElement>);
+                if (!dragState.current.active || allowDuplicates || dragState.current.visited.has(optionValue)) return;
+                dragState.current.visited.add(optionValue);
+                dragState.current.moved = true;
+                toggleDraggedOption(optionValue);
+            },
+            onMouseUp: event => {
+                dragState.current.active = false;
+                existingInnerProps?.onMouseUp?.(event);
+            },
+            onClick: event => {
+                if (dragState.current.moved || (!allowDuplicates && dragState.current.visited.has(optionValue))) {
+                    // The mouseup that ends a drag is followed by a click on
+                    // the last row. It was already toggled by mouseenter.
+                    event.preventDefault();
+                    event.stopPropagation();
+                    dragState.current.moved = false;
+                    dragState.current.visited.clear();
                     return;
                 }
+                existingInnerProps?.onClick?.(event);
+            },
+        };
 
-                if (allowDuplicates && allowCreation) {
+        return <CheckboxOption {...optionProps} innerProps={enhancedInnerProps} />;
+    };
+
+    const finishWithValues = React.useCallback(
+        (values: string[], movement: readonly [-1 | 0 | 1, -1 | 0 | 1]) => {
+            const mappedValues = values.map(v => {
+                return allowDuplicates && v.startsWith(VALUE_PREFIX)
+                    ? v.replace(new RegExp(VALUE_PREFIX_REGEX), "")
+                    : v;
+            });
+            onFinishedEditing(
+                {
+                    ...cell,
+                    data: {
+                        ...cell.data,
+                        values: mappedValues,
+                    },
+                },
+                movement
+            );
+        },
+        [allowDuplicates, cell, onFinishedEditing]
+    );
+
+    const handleKeyDown: React.KeyboardEventHandler = event => {
+        switch (event.key) {
+            case "Escape":
+                // react-select closes the menu for Escape, but its close
+                // callback is intentionally ignored for normal selections.
+                setMenuOpen(false);
+                return;
+            case "Enter":
+            case "Tab": {
+                if (allowDuplicates && allowCreation && inputValue) {
                     // This is a workaround to allow the user to enter new values
                     // multiple times.
                     setInputValue("");
                     submitValues([...(value ?? []), inputValue]);
-                    setMenuOpen(false);
-                    event.preventDefault();
                 }
+
+                // The selected checkboxes are a draft until the editor is
+                // finished. Explicitly pass the draft to the grid so Enter and
+                // Tab commit the same values as clicking outside.
+                event.preventDefault();
+                event.stopPropagation();
+                const movement: readonly [-1 | 0 | 1, -1 | 0 | 1] =
+                    event.key === "Tab" ? (event.shiftKey ? [-1, 0] : [1, 0]) : [0, 1];
+                finishWithValues(
+                    allowDuplicates && allowCreation && inputValue ? [...(value ?? []), inputValue] : value ?? [],
+                    movement
+                );
+                setMenuOpen(false);
+                return;
+            }
         }
     };
 
@@ -394,7 +534,11 @@ const Editor: ReturnType<ProvideEditorCallback<MultiSelectCell>> = p => {
                 }}
                 menuIsOpen={cell.readonly ? false : menuOpen}
                 onMenuOpen={() => setMenuOpen(true)}
-                onMenuClose={() => setMenuOpen(false)}
+                // react-select may request a close after selecting an option
+                // even with closeMenuOnSelect=false (for example when the
+                // controlled value changes). Keep the menu open until the
+                // editor itself is committed by Enter/Tab or click-outside.
+                onMenuClose={() => undefined}
                 value={resolveValues(value, options, allowDuplicates)}
                 onKeyDown={cell.readonly ? undefined : handleKeyDown}
                 menuPlacement={"auto"}
@@ -402,7 +546,10 @@ const Editor: ReturnType<ProvideEditorCallback<MultiSelectCell>> = p => {
                 autoFocus={true}
                 openMenuOnFocus={true}
                 openMenuOnClick={true}
-                closeMenuOnSelect={true}
+                // Keep the list open while checkboxes are being selected. The
+                // editor is committed by blur/click-outside, Enter, or Tab.
+                closeMenuOnSelect={false}
+                hideSelectedOptions={false}
                 backspaceRemovesValue={true}
                 escapeClearsValue={false}
                 styles={colorStyles}
@@ -410,6 +557,7 @@ const Editor: ReturnType<ProvideEditorCallback<MultiSelectCell>> = p => {
                     DropdownIndicator: () => null,
                     IndicatorSeparator: () => null,
                     MultiValueLabel: SelectableMultiValueLabel,
+                    Option: DragCheckboxOption,
                     Menu: props => {
                         if (menuDisabled) {
                             return null;

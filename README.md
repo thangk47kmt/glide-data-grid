@@ -110,6 +110,10 @@ The full [API documentation is on the main site](https://docs.grid.glideapps.com
 
 # 📒 FAQ
 
+## Spreadsheet development preview
+
+An optional lightweight spreadsheet model, formula engine, search/filter/sort primitives, tests, and an interactive Storybook harness are available in `packages/spreadsheet`. See [the spreadsheet roadmap](docs/SPREADSHEET_ROADMAP.md) and run `npm run debug:spreadsheet` for the local UI.
+
 **Nothing shows up!**
 
 Please read the [Prerequisites section in the docs](packages/core/API.md).

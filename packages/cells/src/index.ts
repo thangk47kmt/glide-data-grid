@@ -2,7 +2,17 @@ import StarCellRenderer, { type StarCell } from "./cells/star-cell.js";
 import SparklineCellRenderer, { type SparklineCell } from "./cells/sparkline-cell.js";
 import TagsCellRenderer, { type TagsCell } from "./cells/tags-cell.js";
 import UserProfileCellRenderer, { type UserProfileCell } from "./cells/user-profile-cell.js";
-import DropdownCellRenderer, { type DropdownCell } from "./cells/dropdown-cell.js";
+import DropdownCellRenderer, {
+    type DropdownCell,
+    type DropdownCellProps,
+    filterDropdownOptions,
+    isDropdownValueAllowed,
+    matchesDropdownOption,
+    normalizeDropdownOptions,
+    validateDropdownPaste,
+    type DropdownOption,
+    type NormalizedDropdownOption,
+} from "./cells/dropdown-cell.js";
 import ArticleCellRenderer from "./cells/article-cell.js";
 import type { ArticleCell } from "./cells/article-cell-types.js";
 import RangeCellRenderer, { type RangeCell } from "./cells/range-cell.js";
@@ -44,6 +54,11 @@ export {
     TreeViewCellRenderer as TreeViewCell,
     MultiSelectCellRenderer as MultiSelectCell,
     cells as allCells,
+    filterDropdownOptions,
+    isDropdownValueAllowed,
+    matchesDropdownOption,
+    normalizeDropdownOptions,
+    validateDropdownPaste,
 };
 
 export type {
@@ -60,4 +75,7 @@ export type {
     ButtonCell as ButtonCellType,
     TreeViewCell as TreeViewCellType,
     MultiSelectCell as MultiSelectCellType,
+    DropdownOption,
+    NormalizedDropdownOption,
+    DropdownCellProps,
 };
